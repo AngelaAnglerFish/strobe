@@ -4,9 +4,8 @@
 //some code from https://playground.arduino.cc/Main/Readingrps
 //strobe modified from TimerOne examples
 
-
 //rps reading settingsS
-// read rps and calculate average every second
+//read rps and calculate average every second
 const int numreadings = 10;
 int readings[numreadings];
 unsigned long average = 0;
@@ -21,9 +20,10 @@ unsigned long lastmillis = 0;
 const int strobePin = 9;
 float dutyCycle = 5.0;  //percent
 float dutyCycle_use = (dutyCycle / 100) * 1023;
+float period_micro_float = 10000000;
 unsigned long period_microsec = 10000000;
 
-unsigned int stobes_per_rot = 14;
+float stobes_per_rot = 13.646;
 
 void rps_counter(); // forward declare
 
@@ -37,20 +37,20 @@ void setup(){
 void loop(){
 
 
- if (millis() - lastmillis >= 1000){  /*Uptade every one second, this will be equal to reading frecuency (Hz).*/
+ if (millis() - lastmillis >= 1000){  /*Update every one second, this will be equal to reading frecuency (Hz).*/
 
      detachInterrupt(0);    //Disable interrupt when calculating
      total = 0;
-     readings[index] = rpscount;  /* Convert frecuency to rps, note: this works for one interruption per full rotation. For two interrups per full rotation use rpscount/2.*/
+     readings[index] = rpscount;  /* One interruption per full rotation. For two interrupts per full rotation use rpscount/2.*/
 
      for (int x=0; x<=9; x++){
        total = total + readings[x];
      }
 
      average = total / numreadings;
-     rps = average;
+     //rps = average;
 
-     rps = readings[index]; //TODO, for now
+     rps = rpscount; //TODO, average not used for now, so just take the current reading
 
      rpscount = 0; // Restart the rps counter
      index++;
@@ -58,18 +58,23 @@ void loop(){
       index=0;
      }
 
-    if (millis() > 11000){  // wait for rpss average to get stable
-     Serial.print(" rps = ");
-     Serial.println(rps);
-    }
+    // if (millis() > 11000){  // wait for rpss average to get stable
+    //  Serial.print(" rps = ");
+    //  Serial.println(rps);
+    // }
 
     //set Strobe
     //calc frequncy
-    period_microsec = (rps * 1000000) / 14 ;
+    if (rps<=1){
+      rps=1000;
+    }
+    period_micro_float = (1000000/rps)  / stobes_per_rot ;
+
+    period_microsec = (unsigned int) period_micro_float;
     Timer1.setPeriod(period_microsec);
     Timer1.pwm(strobePin, dutyCycle_use);
 
-    lastmillis = millis(); // Uptade lasmillis
+    lastmillis = millis(); // Update lasmillis
     attachInterrupt(0, rps_counter, FALLING); //enable interrupt
     }
 }
