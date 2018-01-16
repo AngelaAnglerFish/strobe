@@ -6,13 +6,16 @@
 
 //rps reading settingsS
 //read rps and calculate average every second
-const int numreadings = 10;
-int readings[numreadings];
+const int numreadings = 5;
+volatile unsigned long readings[numreadings];
 unsigned long average = 0;
-int index = 0;
+unsigned long period1 = 0;
+volatile int index = 0;
 unsigned long total;
 
-volatile int rpscount = 0;
+volatile bool strobing = false;
+
+int rpscount = 0;
 unsigned long rps = 0;
 unsigned long lastmillis = 0;
 
@@ -20,8 +23,9 @@ unsigned long lastmillis = 0;
 const int strobePin = 9;
 float dutyCycle = 5.0;  //percent
 float dutyCycle_use = (dutyCycle / 100) * 1023;
-float period_micro_float = 10000000;
+float strobe_period_float = 10000000;
 unsigned long period_microsec = 10000000;
+const unsigned long non_strobe_period = 1000; //stobe period when not yet in strobe mode - just a light. 1000us == 1000hz
 
 float stobes_per_rot = 13.646;
 
@@ -41,39 +45,28 @@ void loop(){
 
      detachInterrupt(0);    //Disable interrupt when calculating
      total = 0;
-     readings[index] = rpscount;  /* One interruption per full rotation. For two interrupts per full rotation use rpscount/2.*/
-
-     for (int x=0; x<=9; x++){
-       total = total + readings[x];
+     for (int x=numreadings-1; x>=1; x--){ //count DOWN though the array, every 70 min this might make one glitch as the timer rolls over
+       period1 = readings[x]-readings[x-1];
+       total = total + period1;
      }
 
-     average = total / numreadings;
-     //rps = average;
+      average = total / numreadings; //average period
+      if(average>=1000000){ //if spinning at less than 1hz, then stop strobe mode
+        strobing=false;
+      }
 
-     rps = rpscount; //TODO, average not used for now, so just take the current reading
+     if(strobing){
+      strobe_period_float = average / stobes_per_rot ;
 
-     rpscount = 0; // Restart the rps counter
-     index++;
-     if(index >= numreadings){
-      index=0;
-     }
-
-    // if (millis() > 11000){  // wait for rpss average to get stable
-    //  Serial.print(" rps = ");
-    //  Serial.println(rps);
-    // }
-
-    //set Strobe
-    //calc frequncy
-    if (rps<=1){
-      rps=1000;
+      period_microsec = (unsigned int) strobe_period_float;
+      Timer1.setPeriod(period_microsec);
+      Timer1.pwm(strobePin, dutyCycle_use);
     }
-    period_micro_float = (1000000/rps)  / stobes_per_rot ;
 
-    period_microsec = (unsigned int) period_micro_float;
-    Timer1.setPeriod(period_microsec);
-    Timer1.pwm(strobePin, dutyCycle_use);
-
+    else{ //not strobing
+      Timer1.setPeriod(non_strobe_period);
+      Timer1.pwm(strobePin, dutyCycle_use);
+    }
     lastmillis = millis(); // Update lasmillis
     attachInterrupt(0, rps_counter, FALLING); //enable interrupt
     }
@@ -81,5 +74,12 @@ void loop(){
 
 
 void rps_counter(){ /* this code will be executed every time the interrupt 0 (pin2) gets low.*/
-  rpscount++;
+  //this is really a bit much code for an ISR, but we only have ~3 rps so it should be ok
+  readings[index] = micros();
+  index++;
+  if(index >= numreadings){
+   index=0;
+   strobing = true;  //we have enough for an average, start strobing
+  }
+
 }
