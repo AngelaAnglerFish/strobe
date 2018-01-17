@@ -38,15 +38,15 @@ void loop(){
 
   //Check hall effect block timer
   if(block){
-    detachInterrupt(0);    //Disable interrupt for ignoring multitriggers
+    // detachInterrupt(0);    //Disable interrupt for ignoring multitriggers
     if(micros()-block_timer >= 100000){
       block=false;
-      attachInterrupt(0, rps_counter, FALLING); //enable interrupt
+      // attachInterrupt(0, rps_counter, FALLING); //enable interrupt
     }
   }
 
   if(calcnow){
-    detachInterrupt(0);    //Disable interrupt when printing
+    // detachInterrupt(0);    //Disable interrupt when printing
     total = 0;
     for (int x=numreadings-1; x>=1; x--){ //count DOWN though the array, every 70 min this might make one glitch as the timer rolls over
       period1 = readings[x]-readings[x-1];
@@ -56,32 +56,36 @@ void loop(){
 
     Serial.println(average);
 
-    if(average<1000000){ //ie, more than 1hz of rotation.
+    if(average<10000000){ //ie, more than 0.1hz of rotation.
       strobe_period_float = average / stobes_per_rot ;
       period_microsec = (unsigned int) strobe_period_float;
       Timer1.setPeriod(period_microsec);
       Timer1.pwm(strobePin, dutyCycle_use);
     }
     else{
+      Serial.println("ack too slow, going to constant light")
       Timer1.setPeriod(non_strobe_period);
       Timer1.pwm(strobePin, dutyCycle_use);
     }
     calcnow = false;
-    attachInterrupt(0, rps_counter, FALLING); //enable interrupt
+    // attachInterrupt(0, rps_counter, FALLING); //enable interrupt
   }
 }
 
 void rps_counter(){ /* this code will be executed every time the interrupt 0 (pin2) gets low.*/
   //this is really a bit much code for an ISR, but we only have ~3 rps so it should be ok
-  readings[index] = micros();
-  index++;
 
-  //Double triggering block
-  block_timer = micros();
-  block=true;
+  if(block==false){
+    readings[index] = micros();
+    index++;
 
-  if(index >= numreadings){
-   index=0;
-   calcnow=true;
-  }
+    //Double triggering block
+    block_timer = micros();
+    block=true;
+
+    if(index >= numreadings){
+     index=0;
+     calcnow=true;
+    }
+  } //if "blocked", do nothing
 }
